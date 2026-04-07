@@ -44,6 +44,9 @@ Slime Core は、
 - Streamlit
 - Ollama
 
+![HFLGIG-akAAx9Xd](https://github.com/user-attachments/assets/79684d32-2250-495b-8b67-82b8e7d4c09b)
+
+
 ---
 
 ## Setup
@@ -55,5 +58,8 @@ Slime Core は、
 例:
 
 ```bash
+
+
+
 ollama pull gemma3:12b
 bash launch.command
