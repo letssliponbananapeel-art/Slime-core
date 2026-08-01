@@ -1,0 +1,37 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# 会話ログ（個人の会話内容が入るため公開しない）
+data/chats/
+*.chatlog.json
+
+# 古文処理の成果物（資料本文・OCR結果・訳文が入るため公開しない）
+outputs/
+
+# 起動ログ（ローカルの絶対パスを含むため公開しない）
+last_launch.log
+
+# OCR バイナリ（各自で導入するもの）
+tools/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# エディタ
+.vscode/
+.idea/
+*.swp
+
+# 一時ファイル
+*.log
+*.tmp

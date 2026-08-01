@@ -1,0 +1,26 @@
+{
+  "ocr": {
+    "binary": "tools/ndlocr-lite-run",
+    "args": ["--sourceimg", "{input}", "--output", "{output}", "--json-only"],
+    "timeout_seconds": 300
+  },
+  "pdf": {
+    "dpi": 180,
+    "split_timeout_seconds": 300,
+    "max_upload_megabytes": 200
+  },
+  "filter": {
+    "confidence_threshold": 0.5,
+    "jp_char_ratio_threshold": 0.5,
+    "missing_confidence_policy": "unclear"
+  },
+  "ollama": {
+    "host": "http://127.0.0.1:11434",
+    "timeout_seconds": 300,
+    "num_predict": 900,
+    "temperature": 0.15
+  },
+  "output": {
+    "directory": "outputs"
+  }
+}
