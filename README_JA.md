@@ -4,6 +4,16 @@ Ollama 経由で動く、音声読み上げつきの Slimecore です。通常�
 
 「lunch」は手軽さ（お昼ごはんのように軽く使える）と起動（launch）の掛詞です。
 
+## 画面
+
+**会話タブ**
+
+![会話タブ](docs/screenshots/chat.png)
+
+**古文処理タブ**
+
+![古文処理タブ](docs/screenshots/kobun.png)
+
 ## 入っているもの
 
 - `app.py` : Streamlit の会話アプリ
@@ -100,9 +110,120 @@ macOS の `say` コマンドで返答を読み上げます。サイドバーで�
 - 低信頼度行または日本語文字比率が低い行は、推測で補わず `(原文不明瞭)` として訳文へ残します。
 - 結果は `outputs/<session_id>/` に保存され、`translation.txt`、`manifest.json`、ページ画像、OCR JSON、フィルタ結果を含みます。
 
-PDF処理にはNDLOCR-Liteと `pdftoppm` が必要です。標準構成では、アプリ内の `tools/ndlocr-lite-run` から専用のPython環境に導入したNDLOCR-Liteを起動します。`app_config.json` の `ocr.binary` と `ocr.args` を変更すると、別のOCRコマンドにも接続できます。
+PDF処理にはNDLOCR-Liteと `pdftoppm` が必要です。標準構成では、アプリ内の `tools/ndlocr-lite-run` から専用のPython環境に導入したNDLOCR-Liteを起動します。導入手順は下の「[NDLOCR-Lite の導入](#ndlocr-lite-の導入)」を参照してください。
 
 古文処理はバックグラウンドで実行されるため、処理中も会話タブを利用できます。
+
+## NDLOCR-Lite の導入
+
+PDFから読み取る場合のみ必要です。OCR JSONを読み込むだけなら、この手順は不要です。
+
+NDLOCR-Lite は国立国会図書館が公開しているOCRソフトウェアです（CC BY 4.0）。GPUがなくてもCPUだけで動きます。
+
+- リポジトリ: <https://github.com/ndl-lab/ndlocr-lite>
+- 使い方の解説: <https://lab.ndl.go.jp/data_set/ndlocrlite-usage/>
+
+このアプリは NDLOCR-Lite を**外部コマンドとして呼び出す**構成です。アプリ本体とは別のPython環境に入れるので、`requirements.txt` の依存関係と衝突しません。
+
+### 1. Poppler を入れる（`pdftoppm` / `pdfinfo`）
+
+PDFをページ画像へ変換するために使います。
+
+```bash
+brew install poppler
+pdftoppm -v
+```
+
+### 2. NDLOCR-Lite を専用の環境へ入れる
+
+Python 3.10 以上が必要です。ここでは `~/tools/ndlocr-lite` に置く例を示します。
+
+```bash
+mkdir -p ~/tools
+cd ~/tools
+git clone https://github.com/ndl-lab/ndlocr-lite.git
+cd ndlocr-lite
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+単体で動くか確認します。
+
+```bash
+cd ~/tools/ndlocr-lite/src
+../.venv/bin/python ocr.py --sourceimg /path/to/page.png --output /tmp/ndlocr-test --json-only
+ls /tmp/ndlocr-test
+```
+
+`/tmp/ndlocr-test/page.json` ができれば成功です。初回はモデルの読み込みで時間がかかります。
+
+> GUI版（`ndlocr_lite_gui.exe` などの配布ファイル）はマウス操作用で、このアプリからは呼び出せません。上記のソース版を使ってください。
+
+### 3. ラッパースクリプトを置く
+
+アプリは `tools/ndlocr-lite-run` を実行します。SLIMEcore のフォルダー内に次のファイルを作ります。
+
+```bash
+mkdir -p ~/Desktop/SLIMEcore_lun/tools
+cat > ~/Desktop/SLIMEcore_lun/tools/ndlocr-lite-run <<'EOF'
+#!/bin/bash
+# NDLOCR-Lite を専用のPython環境で起動する
+set -euo pipefail
+NDLOCR_DIR="$HOME/tools/ndlocr-lite"
+cd "$NDLOCR_DIR/src"
+exec "$NDLOCR_DIR/.venv/bin/python" ocr.py "$@"
+EOF
+chmod +x ~/Desktop/SLIMEcore_lun/tools/ndlocr-lite-run
+```
+
+`cd` していますが、アプリが渡す画像パスと出力先は絶対パスなので問題ありません。
+
+> **`chmod +x` を忘れないでください。** アプリはファイルの存在だけを見て「導入済み」と判定します。実行権限がないと、画面上は導入済みに見えたまま、処理の途中で「文字の読み取りに失敗しました」になります。
+
+### 4. アプリ側で確認する
+
+アプリを起動して「古文処理」タブを開きます。
+
+- 導入済み: 「NDLOCR-Lite を検出しました。PDFを全ページ処理できます。」（緑）
+- 未導入: NDLOCR-Lite が見つからない旨の警告（黄）。この状態でもOCR JSONの読み込みは使えます。
+
+### 設定の変更
+
+`app_config.json` の `ocr` セクションで呼び出し方を変えられます。
+
+```json
+"ocr": {
+  "binary": "tools/ndlocr-lite-run",
+  "args": ["--sourceimg", "{input}", "--output", "{output}", "--json-only"],
+  "timeout_seconds": 300
+}
+```
+
+- `binary`: 相対パスならアプリのフォルダーからの相対、絶対パスや `~` も使えます。`/` を含まない場合は `PATH` から探します（`uv tool install .` で入れた `ndlocr-lite` コマンドをそのまま指定する構成も可能です）。
+- `args`: `{input}` にページ画像、`{output}` に一時ディレクトリが入ります。アプリは `{output}/<画像名>.json` を読みます。
+- `timeout_seconds`: 1ページあたりの上限。ページが重い場合は延ばしてください。
+
+期待するJSONの形は NDLOCR-Lite の出力そのままです。
+
+```json
+{
+  "contents": [[{ "id": 0, "text": "...", "confidence": 0.93, "boundingBox": [[0,0],[0,0],[0,0],[0,0]] }]],
+  "imginfo": { "img_width": 1200, "img_height": 1800, "img_path": "...", "img_name": "page_0001.png" }
+}
+```
+
+`confidence` が `confidence_filter` のしきい値（既定 0.5）を下回る行は、推測で埋めずに `(原文不明瞭)` として訳文に残します。
+
+### うまくいかないとき
+
+| 症状 | 原因と対処 |
+| --- | --- |
+| 「NDLOCR-Liteが見つかりません」 | `tools/ndlocr-lite-run` のパスを確認。`app_config.json` の `ocr.binary` と一致しているか。 |
+| 「正しくインストールされているか確認してください」 | 実行権限（`chmod +x`）か、NDLOCR-Lite側の依存不足。手順2のコマンドを単体で実行して確認。 |
+| 「読み取り結果の形式が想定と異なります」 | `--json-only` が抜けている、または出力先に他のJSONが混ざっている。 |
+| 「時間がかかりすぎています」 | `timeout_seconds` を延ばす。ページ数を減らす。 |
+| `pdftoppm: command not found` | `brew install poppler`。 |
 
 ## 検証
 
